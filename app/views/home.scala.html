@@ -1,0 +1,16 @@
+<html>
+	<head>
+		<title>bigdata-qddml</title>
+	</head>
+	<body></body>
+</html>
+<script>
+	var xhr = new XMLHttpRequest();
+	xhr.onreadystatechange = function()
+	{
+		if(xhr.readyState == 4 && xhr.status == 200)
+   			document.getElementsByTagName("body")[0].innerHTML = xhr.response;
+	}	
+	xhr.open("GET", "https://raw.githubusercontent.com/mnevfel/bigdata-qddml/master/README.md");
+	xhr.send(null);
+</script>
