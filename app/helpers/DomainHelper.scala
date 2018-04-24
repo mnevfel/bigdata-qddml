@@ -2,6 +2,9 @@ package helpers
 
 import play.Play
 
+/**
+ * Domain Helper Methods Here
+ * */
 object DomainHelper {
   var Host: String = {
     if (Play.application().isProd()) {

@@ -4,6 +4,10 @@ import play.api.libs.oauth._
 import play.api.mvc._
 import play.Play
 
+
+/**
+ * Twitter Helper Methods Here
+ * */
 object TwitterHelper {
   val key = Play.application().configuration()
     .getString("twitter.consumer.key")

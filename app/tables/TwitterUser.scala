@@ -2,6 +2,9 @@ package tables
 
 import slick.driver.MySQLDriver.api._
 
+/**
+ * Twitter User Class For Orm
+ * */
 case class TwitterUser(
   override val ID:    Long           = 0,
   var Name:           String         = "",

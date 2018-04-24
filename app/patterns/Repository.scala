@@ -6,6 +6,9 @@ import slick.driver.MySQLDriver.api._
 import slick.lifted.CanBeQueryCondition
 import scala.concurrent.ExecutionContext
 
+/**
+ * Database Table Query Pattern
+ * */
 class Repository[E <: Base, T <: BaseTable[E]](query: TableQuery[T]) {
   private val _query: TableQuery[T] = query
 

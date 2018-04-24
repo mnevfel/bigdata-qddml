@@ -8,6 +8,9 @@ import play.api.Play
 import scala.concurrent._
 import scala.concurrent.duration._
 
+/**
+ * Multiple Database Management Pattern
+ */
 abstract class UnitOfWork(dbName: String) {
   private lazy val _db = DatabaseConfigProvider.get[JdbcProfile](dbName)(Play.current).db
   implicit class ExtRunner[R](action: DBIOAction[R, NoStream, Nothing]) {
