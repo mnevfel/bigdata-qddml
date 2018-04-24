@@ -17,11 +17,7 @@ import databases.BigDataDb._
 
 @Singleton
 class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(implicit ec: ExecutionContext) extends AbstractController(cc) {
-  def index() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.twitter())
-  }
-
-  def auth = Action.async { request: Request[AnyContent] =>
+  def index = Action.async { request: Request[AnyContent] =>
     request.getQueryString("oauth_verifier").map { verifier =>
       // Runs > If callback returns with verifier
       val tokenPair = TwitterHelper.TwitterPair(request).get

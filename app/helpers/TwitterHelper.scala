@@ -29,5 +29,5 @@ object TwitterHelper {
     }
   }
   val TwApi = "https://api.twitter.com/1.1/"
-  val TwCallBackUrl = DomainHelper.Host + "twitter/auth"
+  val TwCallBackUrl = DomainHelper.Host + "twitter"
 }
