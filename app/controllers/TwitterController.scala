@@ -23,6 +23,7 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
 
   def auth = Action.async { request: Request[AnyContent] =>
     request.getQueryString("oauth_verifier").map { verifier =>
+      // Runs > If callback returns with verifier
       val tokenPair = TwitterHelper.TwitterPair(request).get
       TwitterHelper.TwitterOAuth.retrieveAccessToken(tokenPair, verifier) match {
         case Right(t) => {
@@ -30,6 +31,7 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
             .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(t.token, t.secret)))
             .get
             .map(result => {
+              //Save to database from json object.
               val obj = result.json.as[JsObject]
               BigDataDb.TwitterUser.Insert(new TwitterUser {
                 Name = (obj \ "name").as[String];
@@ -50,6 +52,7 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
         case _ => { Future.successful(Forbidden("Key not found.")) }
       }
     }.getOrElse(
+      // Runs > If first request is calling
       TwitterHelper.TwitterOAuth.retrieveRequestToken(TwitterHelper.TwCallBackUrl) match {
         case Right(t) => {
           Future.successful(Redirect(TwitterHelper.TwitterOAuth.redirectUrl(t.token))
