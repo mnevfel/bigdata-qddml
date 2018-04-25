@@ -46,7 +46,7 @@ class TwitterUserService {
         .map(result => {
           val obj = result.json.as[JsObject]
           val ids = (obj \ "ids").as[List[Long]];
-          BigDataDb.TwitterFollow.Filter(x => x.UserID === id).delete.run
+          BigDataDb.TwitterFollow.Filter(x => x.UserID === id && x.FollowType === typeId).delete.run
           ids.foreach(x => {
             BigDataDb.TwitterFollow.Insert(new TwitterFollow {
               UserID = id;
