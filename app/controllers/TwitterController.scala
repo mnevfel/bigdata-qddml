@@ -9,6 +9,7 @@ import scala.concurrent._
 import play.api.libs.oauth._
 import play.api.libs.json._
 
+import services.TwitterServiceProvider
 import play.api.libs.ws.WSClient
 import helpers.TwitterHelper
 
@@ -23,26 +24,14 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
       val tokenPair = TwitterHelper.TwitterPair(request).get
       TwitterHelper.TwitterOAuth.retrieveAccessToken(tokenPair, verifier) match {
         case Right(t) => {
-          ws.url(TwitterHelper.TwApi + "account/verify_credentials.json?include_email=true")
+          ws.url(TwitterHelper.TwApi + "account/verify_credentials.json")
             .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(t.token, t.secret)))
             .get
             .map(result => {
               //Save to database from json object.
-              val obj = result.json.as[JsObject]
-              BigDataDb.TwitterUser.Insert(new TwitterUser {
-                Name = (obj \ "name").as[String];
-                ScreenName = (obj \ "screen_name").as[String];
-                Identity = (obj \ "id_str").as[String];
-                Token = t.token;
-                Secret = Some(t.secret);
-                FriendsCount = (obj \ "friends_count").as[Long];
-                FollowersCount = (obj \ "followers_count").as[Long];
-                StatusesCount = (obj \ "statuses_count").as[Long];
-                Location = (obj \ "location").asOpt[String];
-                Description = (obj \ "description").asOpt[String];
-              }).run
-
-              Ok("User saved.")
+              val obj = result.json.as[JsObject] + ("token" -> JsString(t.token)) + ("secret" -> JsString(t.secret))
+              TwitterServiceProvider.User.RegisterUserFromJSObject(ws, obj, ec)
+              Redirect("/")
             })
         }
         case _ => { Future.successful(Forbidden("Key not found.")) }
