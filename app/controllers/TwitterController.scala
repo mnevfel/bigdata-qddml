@@ -30,7 +30,7 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
             .map(result => {
               //Save to database from json object.
               val obj = result.json.as[JsObject] + ("token" -> JsString(t.token)) + ("secret" -> JsString(t.secret))
-              TwitterServiceProvider.User.RegisterUserFromJSObject(ws, obj, ec)
+              TwitterServiceProvider.User.RegisterUserFromJSObject(obj, ws, ec)
               Redirect("/")
             })
         }

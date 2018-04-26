@@ -19,7 +19,7 @@ import databases.BigDataDb
 import org.joda.time.DateTime
 import services.TwitterServiceProvider
 
-class TwitterTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit ec: ExecutionContext) {
+class TwitterUserTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit ec: ExecutionContext) {
   // GetFollowers
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,

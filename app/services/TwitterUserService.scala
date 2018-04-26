@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext
 import org.joda.time.DateTime
 
 class TwitterUserService {
-  def RegisterUserFromJSObject(ws: WSClient, obj: JsObject, ec: ExecutionContext) {
+  def RegisterUserFromJSObject(obj: JsObject, ws: WSClient, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
     val identity = (obj \ "id").as[Long];
     BigDataDb.TwitterUser.Filter(x => x.ID === identity).delete.runAsync.map(del => {
@@ -143,17 +143,16 @@ class TwitterUserService {
                   if (status.isDefined) {
                     // Update last call date for to learn is friend valid
                     val upStatus = status.get.copy(
-                        Text = text, 
-                        FormattedText = text,
-                        LastCallDate= DateTime.now.getMillis())
+                      Text = text,
+                      LastCallDate = DateTime.now.getMillis())
                     BigDataDb.TwitterStatus.Update(upStatus).run
                   } else {
                     BigDataDb.TwitterStatus.Insert(new TwitterStatus {
                       Identity = id;
                       UserID = userId;
                       Text = text;
-                      FormattedText = text;
                     }).run
+                    TwitterServiceProvider.Analyze.Keywords(userId, text, ec)
                   }
                   if (id > sinceId) {
                     sinceId = id
