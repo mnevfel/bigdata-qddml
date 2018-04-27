@@ -53,24 +53,7 @@ class TwitterUserTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit ec:
         TwitterServiceProvider.User.UpdateFriends(userId, false, ws, ec)
       }))
   }
-
-  // GetStatuses
-  actSys.scheduler.schedule(
-    initialDelay = 5.seconds,
-    interval = 1.minutes) {
-    val yesterday = DateTime.now().minusDays(1).getMillis
-    val ids = BigDataDb.TwitterUser.table
-      .joinLeft(BigDataDb.TwitterRequest
-        .Filter(x => x.RequestType === TwitterRequestType.GetStatuses))
-      .on(_.ID === _.UserID)
-      .groupBy(x => x._1)
-      .map(x => (x._1, x._2.map(y => y._2.map(z => z.RequestDate)).max))
-      .filter(x => x._2 <= yesterday).map(x => x._1.ID)
-      .result.runAsync.map(response => response.foreach(userId => {
-        TwitterServiceProvider.User.UpdateStatuses(userId, ws, ec)
-      }))
-  }
-
+  
   // ClearInvalidFriends => { "If user's friends not respond from tw, clear them from db." }
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
@@ -81,8 +64,8 @@ class TwitterUserTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit ec:
       })
     })
   }
-
-  // ClearInvalidStatuses => { "If user's statuses not respond from tw, clear them from db." }
+  
+  // ClearInvalidStatuses => { "If user's analyzed statuses older than 3 days, clear them from db." }
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 1.minutes) {

@@ -19,7 +19,7 @@ class TwitterUserService {
     implicit val exec: ExecutionContext = ec
     val identity = (obj \ "id").as[Long];
     BigDataDb.TwitterUser.Filter(x => x.ID === identity).delete.runAsync.map(del => {
-      BigDataDb.TwitterUser.Insert(new TwitterUser {
+      val nwUser = new TwitterUser {
         Name = (obj \ "name").as[String];
         ScreenName = (obj \ "screen_name").as[String];
         Identity = identity;
@@ -27,10 +27,19 @@ class TwitterUserService {
         Secret = (obj \ "secret").as[String];
         Location = (obj \ "location").asOpt[String];
         Description = (obj \ "description").asOpt[String];
-      }).runAsync.map(id => {
+      }
+
+      BigDataDb.TwitterUser.Insert(nwUser).runAsync.map(id => {
         this.UpdateFollowers(id, ws, ec)
         this.UpdateFriends(id, true, ws, ec)
         this.UpdateStatuses(id, ws, ec)
+
+        var keywordText = nwUser.Name + " " + nwUser.ScreenName
+        if (nwUser.Location.isDefined)
+          keywordText += " " + nwUser.Location.get
+        if (nwUser.Description.isDefined)
+          keywordText += " " + nwUser.Description.get
+        TwitterServiceProvider.Analyze.Keywords(id, keywordText, ec)
       })
     })
   }
@@ -136,24 +145,9 @@ class TwitterUserService {
                 objs.value.foreach(obj => {
                   val id = (obj \ "id").as[Long]
                   val text = (obj \ "text").as[String]
-                  val created_at = (obj \ "created_at").as[String]
-                  val status = BigDataDb.TwitterStatus
-                    .Filter(x => x.Identity === id).result.headOption.run
-                  // If identity is already exists
-                  if (status.isDefined) {
-                    // Update last call date for to learn is friend valid
-                    val upStatus = status.get.copy(
-                      Text = text,
-                      LastCallDate = DateTime.now.getMillis())
-                    BigDataDb.TwitterStatus.Update(upStatus).run
-                  } else {
-                    BigDataDb.TwitterStatus.Insert(new TwitterStatus {
-                      Identity = id;
-                      UserID = userId;
-                      Text = text;
-                    }).run
-                    TwitterServiceProvider.Analyze.Keywords(userId, text, ec)
-                  }
+
+                  this.InsertStatus(userId, id, text, ec)
+
                   if (id > sinceId) {
                     sinceId = id
                   }
@@ -170,6 +164,20 @@ class TwitterUserService {
         this.UpdateRequestType(userId, TwitterRequestType.GetStatuses)
       }
     })
+  }
+
+  def InsertStatus(userId: Long, identity: Long,
+                   text: String, ec: ExecutionContext) {
+    val status = BigDataDb.TwitterStatus
+      .Filter(x => x.Identity === identity).result.headOption.run
+    // If identity isn't already exists
+    if (!status.isDefined) {
+      BigDataDb.TwitterStatus.Insert(new TwitterStatus {
+        Identity = identity;
+        UserID = userId;
+      }).run
+      TwitterServiceProvider.Analyze.Keywords(userId, text, ec)
+    }
   }
 
   def ClearInvalidFriends(id: Long, ec: ExecutionContext) {
@@ -189,17 +197,9 @@ class TwitterUserService {
 
   def ClearInvalidStatuses(id: Long, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
-    BigDataDb.TwitterRequest.Filter(x => x.UserID === id
-      && x.RequestType === TwitterRequestType.GetStatuses)
-      .result.headOption.runAsync.map(request => {
-        var limitCallDate = request.isDefined match {
-          case true  => request.get.RequestDate - 3600000
-          case false => DateTime.now.getMillis()
-        }
-        // If identity isn't friend for selected user since yesterday > remove friend
-        BigDataDb.TwitterStatus.Filter(x => x.UserID === id
-          && x.LastCallDate <= limitCallDate).delete.runAsync
-      })
+    // If identity isn't friend for selected user since yesterday > remove friend
+    BigDataDb.TwitterStatus.Filter(x => x.UserID === id
+      && x.AnalyzeDate <= DateTime.now.minusDays(3).getMillis).delete.runAsync
   }
 
   def UpdateRequestType(id: Long, typeId: Short) {
@@ -209,5 +209,48 @@ class TwitterUserService {
       UserID = id;
       RequestType = typeId
     }).runAsync;
+  }
+
+  def InsertFriend(userId: Long, identity: Long, ws: WSClient, ec: ExecutionContext) {
+    implicit val exec: ExecutionContext = ec
+    BigDataDb.TwitterUser.Filter(x => x.ID === userId)
+      .result.headOption.runAsync.map(user => {
+        if (user.isDefined) {
+          ws.url(TwitterHelper.TwApi + "friendships/create.json?user_id=" + identity)
+            .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
+              user.get.Token,
+              user.get.Secret)))
+            .post("ignored")
+            .map(result => {
+              BigDataDb.TwitterFriend.Any(x => x.UserID === userId
+                && x.Identity === identity).runAsync.map(any => {
+                if (!any) {
+                  BigDataDb.TwitterFriend.Insert(new TwitterFriend {
+                    UserID = userId;
+                    Identity = identity;
+                  }).runAsync
+                }
+              })
+            })
+        }
+      })
+  }
+
+  def DeleteFriend(userId: Long, identity: Long, ws: WSClient, ec: ExecutionContext) {
+    implicit val exec: ExecutionContext = ec
+    BigDataDb.TwitterUser.Filter(x => x.ID === userId)
+      .result.headOption.runAsync.map(user => {
+        if (user.isDefined) {
+          ws.url(TwitterHelper.TwApi + "friendships/destroy.json?user_id=" + identity)
+            .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
+              user.get.Token,
+              user.get.Secret)))
+            .post("ignored")
+            .map(result => {
+              BigDataDb.TwitterFriend.Filter(x => x.UserID === userId
+                && x.Identity === identity).delete.runAsync
+            })
+        }
+      })
   }
 }

@@ -13,18 +13,24 @@ object TextHelper {
       .replace("ü", "u")
       .replace("ç", "c")
       .replace("ğ", "g")
-      .replace("ö", "o").toList.foreach(char => {
-        val ascii = char.toInt
-        if (ascii >= 97 && ascii <= 122) {
-          nwText += char
+      .replace("ı", "i")
+      .replace("ö", "o").toList.zipWithIndex.foreach {
+        case (char, index) => {
+          val ascii = char.toInt
+          if (ascii >= 97 && ascii <= 122) {
+            nwText += char
+          } else if (index != 0 && index != text.length - 1
+            && (ascii == 45 /*-*/ || ascii == 95 /*_*/ )) {
+            nwText += char
+          }
         }
-      })
+      }
     return nwText
   }
 
   def IsValid(text: String): Boolean = {
     return (text.length() >= 3
-      && !text.contains("httpstco"))
+      && !text.contains("http"))
   }
 
   def HasSpecial(text: String): Boolean = {
@@ -37,8 +43,8 @@ object TextHelper {
     if (!text.isEmpty()) {
       //If after head index between before last char index contains special char
       if (this.HasSpecial(text)) { rank += 1 }
-      if (text.head == '@') { rank += 1 }
-      else if (text.head == '#') { rank += 2 }
+      if (text.head == '#') { rank += 2 }
+      else if (text.head == '@') { rank += 3 }
     }
 
     return rank
