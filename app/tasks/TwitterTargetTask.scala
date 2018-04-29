@@ -24,7 +24,7 @@ class TwitterTargetTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit e
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 1.minutes) {
-    val limitDate = DateTime.now().minusMinutes(5).getMillis
+    val limitDate = DateTime.now().minusMinutes(3).getMillis
     BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
         .Filter(x => x.RequestType === TwitterRequestType.PostFollow))
@@ -43,13 +43,13 @@ class TwitterTargetTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit e
             }
           })
       }))
-  } 
-     
+  }
+
   // UnFollowTarget
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 1.minutes) {
-    val limitDate = DateTime.now().minusMinutes(3).getMillis
+    val limitDate = DateTime.now().minusMinutes(1).getMillis
     val limitFriendDate = DateTime.now().minusHours(6).getMillis
     BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
@@ -71,5 +71,13 @@ class TwitterTargetTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit e
             }
           })
       }))
+  }
+
+  //ClearDeletedTargets
+  actSys.scheduler.schedule(
+    initialDelay = 5.seconds,
+    interval = 1.minutes) {
+    val limitDate = DateTime.now().minusDays(30).getMillis
+    BigDataDb.TwitterTarget.Filter(x => x.DeleteDate <= limitDate).delete.runAsync
   }
 }

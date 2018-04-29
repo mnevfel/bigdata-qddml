@@ -54,16 +54,16 @@ class TwitterApiService {
   // Get Current Friends For User Account From Tw Api & Update Them On Db
   def UpdateFriends(id: Long, permanent: Boolean, ws: WSClient, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
-    BigDataDb.TwitterUser.Filter(x => x.ID === id).result.headOption.runAsync.map(user => {
-      if (user.isDefined) {
+    BigDataDb.TwitterUser.Filter(x => x.ID === id).result.headOption.runAsync.map(fuser => {
+      if (fuser.isDefined) {
         var cursor: Long = -1
-        val url = TwitterHelper.TwApi + "friends/list.json?cursor={{cursor}}&user_id=" + user.get.Identity + "&count=5000"
+        val url = TwitterHelper.TwApi + "friends/list.json?cursor={{cursor}}&user_id=" + fuser.get.Identity + "&count=5000"
         def update() {
           if (cursor != 0) {
             ws.url(url.replace("{{cursor}}", cursor.toString()))
               .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
-                user.get.Token,
-                user.get.Secret)))
+                fuser.get.Token,
+                fuser.get.Secret)))
               .get
               .map(result => {
                 val obj = result.json.as[JsObject]
@@ -79,7 +79,8 @@ class TwitterApiService {
                   if (desc.isDefined)
                     keywordText += " " + desc.get
 
-                  BigDataDb.TwitterFriend.Filter(x => x.Identity === identity)
+                  BigDataDb.TwitterFriend.Filter(x => x.UserID === fuser.get.ID
+                    && x.Identity === identity)
                     .result.headOption.runAsync.map(friend => {
                       // If identity is already exists
                       if (friend.isDefined) {
@@ -111,7 +112,7 @@ class TwitterApiService {
     BigDataDb.TwitterUser.Filter(x => x.ID === userId)
       .result.headOption.runAsync.map(user => {
         if (user.isDefined) {
-          ws.url(TwitterHelper.TwApi + "friendships/create.json?user_id=" + identity+"&follow=true")
+          ws.url(TwitterHelper.TwApi + "friendships/create.json?user_id=" + identity + "&follow=true")
             .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
               user.get.Token,
               user.get.Secret)))
@@ -127,6 +128,7 @@ class TwitterApiService {
                 }
               })
             })
+          TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.PostFollow, ec)
         }
       })
   }
@@ -153,6 +155,7 @@ class TwitterApiService {
                   }
                 })
             })
+          TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.PostUnFollow, ec)
         }
       })
   }

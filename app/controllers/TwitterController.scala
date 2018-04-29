@@ -72,8 +72,11 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
             && !x.Permanent).length.result.run
         val followLen = BigDataDb.TwitterFollow
           .Filter(x => x.UserID === user.ID).length.result.run
+        val unFollowLen = BigDataDb.TwitterTarget
+          .Filter(x => x.UserID === user.ID
+            && x.DeleteDate.isDefined).length.result.run
 
-        dashText += "Fri(P):" + friendLen + "|Fri(!P):" + followedLen + "|Fo:" + followLen
+        dashText += "Fri(P):" + friendLen + "|Fri(!P):" + followedLen + "|Fo:" + followLen + "|UnFo:" + unFollowLen
         dashText += "</br>"
       })
 
