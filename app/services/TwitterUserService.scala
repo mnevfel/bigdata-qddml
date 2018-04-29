@@ -123,25 +123,25 @@ class TwitterUserService {
       })
   }
 
-  // Clear(Remove Permanent) -> AnalyzeDate, Older Than 3 Days
+  // Clear Statuses(Remove Permanent) -> AnalyzeDate, Older Than 10 Days
   def ClearInvalidStatuses(id: Long, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
-    // If identity isn't friend for selected user since yesterday > remove friend
+    // If status analyze date before 10 days then now > remove
     BigDataDb.TwitterStatus.Filter(x => x.UserID === id
-      && x.AnalyzeDate <= DateTime.now.minusDays(3).getMillis).delete.runAsync
+      && x.AnalyzeDate <= DateTime.now.minusDays(10).getMillis).delete.runAsync
   }
 
-  // Clear(Remove Permanent) -> RequestDate, Older Than 15 Minutes(900000)
+  // Clear Friends(Remove Permanent) -> RequestDate, Older Than 1 Hour(3600000)
   def ClearInvalidFriends(id: Long, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
     BigDataDb.TwitterRequest.Filter(x => x.UserID === id
       && x.RequestType === TwitterRequestType.GetFriends)
       .result.headOption.runAsync.map(request => {
         var limitCallDate = request.isDefined match {
-          case true  => request.get.RequestDate - 900000
+          case true  => request.get.RequestDate - 3600000
           case false => DateTime.now.getMillis()
         }
-        // If identity isn't friend for selected user since yesterday > remove friend
+         // If friend last call date before 1 hour then request date > remove
         BigDataDb.TwitterFriend.Filter(x => x.UserID === id
           && x.LastCallDate <= limitCallDate).delete.runAsync
       })
