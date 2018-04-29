@@ -8,6 +8,7 @@ import play.api.mvc._
 import scala.concurrent._
 import play.api.libs.oauth._
 import play.api.libs.json._
+import slick.driver.MySQLDriver.api._
 
 import services.TwitterServiceProvider
 import play.api.libs.ws.WSClient
@@ -15,6 +16,7 @@ import helpers.TwitterHelper
 
 import databases.BigDataDb
 import databases.BigDataDb._
+import play.api.mvc.Results.EmptyContent
 
 @Singleton
 class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(implicit ec: ExecutionContext) extends AbstractController(cc) {
@@ -45,5 +47,37 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
         }
         case Left(e) => { Future.successful(NotFound("Url isn't match.")) }
       })
+  }
+
+  def dash = Action.async { request: Request[AnyContent] =>
+    BigDataDb.TwitterUser.table.result.runAsync.map((users) => {
+      var dashText = ""
+      users.foreach(user => {
+        val keywords = BigDataDb.TwitterKeyword.Filter(x => x.UserID === user.ID)
+          .groupBy(x => x.Keyword)
+          .map(x => (x._1, x._2.map(y => y.Rank).sum))
+          .sortBy(x => x._2.desc).take(5)
+          .map(x => x._1).result.run
+
+        dashText = user.ScreenName + " : |"
+        keywords.foreach(keyword => {
+          dashText += keyword + "|"
+        })
+
+        val friendLen = BigDataDb.TwitterFriend
+          .Filter(x => x.UserID === user.ID
+            && x.Permanent).length.result.run
+        val followedLen = BigDataDb.TwitterFriend
+          .Filter(x => x.UserID === user.ID
+            && !x.Permanent).length.result.run
+        val followLen = BigDataDb.TwitterFollow
+          .Filter(x => x.UserID === user.ID).length.result.run
+
+        dashText += "Fri(P):" + friendLen + "|Fri(!P):" + followedLen + "|Fo:" + followLen
+        dashText += "</br>"
+      })
+
+      Ok(dashText)
+    })
   }
 }

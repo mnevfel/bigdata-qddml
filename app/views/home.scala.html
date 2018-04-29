@@ -1,16 +1,35 @@
 <html>
-	<head>
-		<title>bigdata-qddml</title>
-	</head>
-	<body></body>
+<head>
+<title>bigdata-qddml</title>
+</head>
+<body>
+	<div id="dash"></div>
+	<br>
+	<div id="readme"></div>
+</body>
 </html>
 <script>
-	var xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function()
-	{
-		if(xhr.readyState == 4 && xhr.status == 200)
-   			document.getElementsByTagName("body")[0].innerHTML = xhr.response;
-	}	
-	xhr.open("GET", "https://raw.githubusercontent.com/mnevfel/bigdata-qddml/master/README.md");
-	xhr.send(null);
+	GetRequest(
+			"https://raw.githubusercontent.com/mnevfel/bigdata-qddml/master/README.md",
+			function(response) {
+				document.getElementById("readme").innerHTML = response;
+			});
+	
+	setInterval(function(){
+		GetRequest(
+				"/twitter/dash",
+				function(response) {
+					document.getElementById("dash").innerHTML = response;
+				});
+	}, 2000);
+
+	function GetRequest(url, callback) {
+		var xhr = new XMLHttpRequest();
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState == 4 && xhr.status == 200)
+				callback(xhr.response);
+		}
+		xhr.open("GET", url);
+		xhr.send(null);
+	}
 </script>

@@ -2,11 +2,14 @@ package patterns
 
 import slick.driver.MySQLDriver.api._
 
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent._
+import scala.concurrent.duration._
+import scala.util._
+
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
 import play.api.Play
-import scala.concurrent._
-import scala.concurrent.duration._
 
 /**
  * Multiple Database Management Pattern
@@ -24,14 +27,21 @@ abstract class UnitOfWork(dbName: String) {
       try {
         Some(this.run)
       } catch {
-        case ex => None
+        case ex => {
+          println(ex.getMessage)
+          None
+        }
       }
     }
-    def handleRunAsync: Option[Future[R]] = {
-      try {
-        Some(this.runAsync)
-      } catch {
-        case ex => None
+    def handleRunAsync(callback: (Option[R]) => Unit = (None) => {}) {
+      _db.run(action.asTry).map {
+        case Failure(ex) => {
+          println(println(ex.getMessage))
+          callback(None)
+        }
+        case Success(op) => {
+          callback(Some(op))
+        }
       }
     }
   }
