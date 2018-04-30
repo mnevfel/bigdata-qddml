@@ -19,31 +19,43 @@ class TwitterUserService {
   def RegisterUserFromJSObject(obj: JsObject, ws: WSClient, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
     val identity = (obj \ "id").as[Long];
-    BigDataDb.TwitterUser.Filter(x => x.Identity === identity).delete.runAsync.map(del => {
-      val nwUser = new TwitterUser {
-        Name = (obj \ "name").as[String];
-        ScreenName = (obj \ "screen_name").as[String];
-        Identity = identity;
-        Token = (obj \ "token").as[String];
-        Secret = (obj \ "secret").as[String];
-        Location = (obj \ "location").asOpt[String];
-        Description = (obj \ "description").asOpt[String];
-      }
+    BigDataDb.TwitterUser.Filter(x => x.Identity === identity)
+      .result.headOption.runAsync.map(user => {
+        val userInfo = new TwitterUser {
+          Name = (obj \ "name").as[String];
+          ScreenName = (obj \ "screen_name").as[String];
+          Identity = identity;
+          Token = (obj \ "token").as[String];
+          Secret = (obj \ "secret").as[String];
+          Location = (obj \ "location").asOpt[String];
+          Description = (obj \ "description").asOpt[String];
+        }
+        if (user.isDefined) {
+          val nwUser = user.get.copy(
+            Name = userInfo.Name,
+            ScreenName = userInfo.ScreenName,
+            Identity = userInfo.Identity,
+            Token = userInfo.Token,
+            Secret = userInfo.Secret,
+            Location = userInfo.Location,
+            Description = userInfo.Description)
+          BigDataDb.TwitterUser.Update(nwUser).runAsync
+        } else {
+          BigDataDb.TwitterUser.Insert(userInfo).runAsync.map(id => {
+            TwitterServiceProvider.Api.UpdateFollowers(id, ws, ec)
+            TwitterServiceProvider.Api.UpdateFriends(id, false, ws, ec)
+            TwitterServiceProvider.Api.ImportTimeLine(id, ws, ec)
+            this.UpdateRequestType(id, true, TwitterRequestType.AnalyzeStatuses, ec)
 
-      BigDataDb.TwitterUser.Insert(nwUser).runAsync.map(id => {
-        TwitterServiceProvider.Api.UpdateFollowers(id, ws, ec)
-        TwitterServiceProvider.Api.UpdateFriends(id, true, ws, ec)
-        TwitterServiceProvider.Api.ImportTimeLine(id, ws, ec)
-        this.UpdateRequestType(id, true, TwitterRequestType.AnalyzeStatuses, ec)
-
-        var keywordText = nwUser.Name + " " + nwUser.ScreenName
-        if (nwUser.Location.isDefined)
-          keywordText += " " + nwUser.Location.get
-        if (nwUser.Description.isDefined)
-          keywordText += " " + nwUser.Description.get
-        this.InsertKeywords(id, keywordText, ec)
+            var keywordText = userInfo.Name + " " + userInfo.ScreenName
+            if (userInfo.Location.isDefined)
+              keywordText += " " + userInfo.Location.get
+            if (userInfo.Description.isDefined)
+              keywordText += " " + userInfo.Description.get
+            this.InsertKeywords(id, keywordText, ec)
+          })
+        }
       })
-    })
   }
 
   // Insert New Tweet With Identity & Analyze and Import Tweet Keywords
@@ -141,7 +153,7 @@ class TwitterUserService {
           case true  => request.get.RequestDate - 3600000
           case false => DateTime.now.getMillis()
         }
-         // If friend last call date before 1 hour then request date > remove
+        // If friend last call date before 1 hour then request date > remove
         BigDataDb.TwitterFriend.Filter(x => x.UserID === id
           && x.LastCallDate <= limitCallDate).delete.runAsync
       })

@@ -28,6 +28,7 @@ object TwitterHelper {
       RequestToken(token, secret)
     }
   }
+  val TwOAuthValid = "https://api.twitter.com/oauth2/invalidate_token"
   val TwApi = "https://api.twitter.com/1.1/"
   val TwCallBackUrl = DomainHelper.Host + "twitter"
 }

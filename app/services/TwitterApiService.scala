@@ -31,16 +31,19 @@ class TwitterApiService {
                   user.get.Secret)))
                 .get
                 .map(result => {
-                  val obj = result.json.as[JsObject]
-                  val ids = (obj \ "ids").as[List[Long]]
-                  cursor = (obj \ "next_cursor").as[Long]
-                  ids.foreach(id => {
-                    BigDataDb.TwitterFollow.Insert(new TwitterFollow {
-                      UserID = userId;
-                      Identity = id;
-                    }).runAsync
-                  })
-                  update()
+                  println("Get followers : " + result.statusText)
+                  if (result.status != 401) {
+                    val obj = result.json.as[JsObject]
+                    val ids = (obj \ "ids").as[List[Long]]
+                    cursor = (obj \ "next_cursor").as[Long]
+                    ids.foreach(id => {
+                      BigDataDb.TwitterFollow.Insert(new TwitterFollow {
+                        UserID = userId;
+                        Identity = id;
+                      }).runAsync
+                    })
+                    update()
+                  }
                 })
             }
           }
@@ -52,9 +55,9 @@ class TwitterApiService {
   }
 
   // Get Current Friends For User Account From Tw Api & Update Them On Db
-  def UpdateFriends(id: Long, permanent: Boolean, ws: WSClient, ec: ExecutionContext) {
+  def UpdateFriends(userId: Long, permanent: Boolean, ws: WSClient, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
-    BigDataDb.TwitterUser.Filter(x => x.ID === id).result.headOption.runAsync.map(fuser => {
+    BigDataDb.TwitterUser.Filter(x => x.ID === userId).result.headOption.runAsync.map(fuser => {
       if (fuser.isDefined) {
         var cursor: Long = -1
         val url = TwitterHelper.TwApi + "friends/list.json?cursor={{cursor}}&user_id=" + fuser.get.Identity + "&count=5000"
@@ -66,43 +69,46 @@ class TwitterApiService {
                 fuser.get.Secret)))
               .get
               .map(result => {
-                val obj = result.json.as[JsObject]
-                val users = (obj \ "users").as[JsArray]
-                cursor = (obj \ "next_cursor").as[Long]
-                users.value.foreach(user => {
-                  val identity = (user \ "id").as[Long]
-                  val name = (user \ "name").as[String]
-                  val screen = (user \ "screen_name").as[String]
-                  val desc = (user \ "description").asOpt[String]
+                println("Get friends : " + result.statusText)
+                if (result.status != 401) {
+                  val obj = result.json.as[JsObject]
+                  val users = (obj \ "users").as[JsArray]
+                  cursor = (obj \ "next_cursor").as[Long]
+                  users.value.foreach(user => {
+                    val identity = (user \ "id").as[Long]
+                    val name = (user \ "name").as[String]
+                    val screen = (user \ "screen_name").as[String]
+                    val desc = (user \ "description").asOpt[String]
 
-                  var keywordText = identity + " " + name + " " + screen
-                  if (desc.isDefined)
-                    keywordText += " " + desc.get
+                    var keywordText = identity + " " + name + " " + screen
+                    if (desc.isDefined)
+                      keywordText += " " + desc.get
 
-                  BigDataDb.TwitterFriend.Filter(x => x.UserID === fuser.get.ID
-                    && x.Identity === identity)
-                    .result.headOption.runAsync.map(friend => {
-                      // If identity is already exists
-                      if (friend.isDefined) {
-                        // Update last call date for to learn is friend valid
-                        val upFriend = friend.get.copy(LastCallDate = DateTime.now.getMillis())
-                        BigDataDb.TwitterFriend.Update(upFriend).runAsync
-                      } else {
-                        BigDataDb.TwitterFriend.Insert(new TwitterFriend {
-                          UserID = id;
-                          Identity = identity;
-                          Permanent = permanent;
-                        }).runAsync
-                        TwitterServiceProvider.User.InsertKeywords(id, keywordText, ec)
-                      }
-                    })
-                })
-                update()
+                    BigDataDb.TwitterFriend.Filter(x => x.UserID === fuser.get.ID
+                      && x.Identity === identity)
+                      .result.headOption.runAsync.map(friend => {
+                        // If identity is already exists
+                        if (friend.isDefined) {
+                          // Update last call date for to learn is friend valid
+                          val upFriend = friend.get.copy(LastCallDate = DateTime.now.getMillis())
+                          BigDataDb.TwitterFriend.Update(upFriend).runAsync
+                        } else {
+                          BigDataDb.TwitterFriend.Insert(new TwitterFriend {
+                            UserID = userId;
+                            Identity = identity;
+                            Permanent = permanent;
+                          }).runAsync
+                          TwitterServiceProvider.User.InsertKeywords(userId, keywordText, ec)
+                        }
+                      })
+                  })
+                  update()
+                }
               })
           }
         }
         update()
-        TwitterServiceProvider.User.UpdateRequestType(id, false, TwitterRequestType.GetFriends, ec)
+        TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.GetFriends, ec)
       }
     })
   }
@@ -112,21 +118,24 @@ class TwitterApiService {
     BigDataDb.TwitterUser.Filter(x => x.ID === userId)
       .result.headOption.runAsync.map(user => {
         if (user.isDefined) {
-          ws.url(TwitterHelper.TwApi + "friendships/create.json?user_id=" + identity + "&follow=true")
+          ws.url(TwitterHelper.TwApi + "friendships/create.json?user_id=" + identity + "&follow=false")
             .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
               user.get.Token,
               user.get.Secret)))
             .post("ignore")
             .map(result => {
-              BigDataDb.TwitterFriend.Any(x => x.UserID === userId
-                && x.Identity === identity).runAsync.map(any => {
-                if (!any) {
-                  BigDataDb.TwitterFriend.Insert(new TwitterFriend {
-                    UserID = userId;
-                    Identity = identity;
-                  }).runAsync
-                }
-              })
+              println("Insert friend : " + result.statusText)
+              if (result.status != 401) {
+                BigDataDb.TwitterFriend.Any(x => x.UserID === userId
+                  && x.Identity === identity).runAsync.map(any => {
+                  if (!any) {
+                    BigDataDb.TwitterFriend.Insert(new TwitterFriend {
+                      UserID = userId;
+                      Identity = identity;
+                    }).runAsync
+                  }
+                })
+              }
             })
           TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.PostFollow, ec)
         }
@@ -144,16 +153,26 @@ class TwitterApiService {
               user.get.Secret)))
             .post("ignored")
             .map(result => {
-              BigDataDb.TwitterFriend.Filter(x => x.UserID === userId
-                && x.Identity === identity).delete.runAsync
-              BigDataDb.TwitterTarget.Filter(x => x.UserID === userId
-                && x.Identity === identity)
-                .result.headOption.runAsync.map(target => {
-                  if (target.isDefined) {
-                    val nwTarget = target.get.copy(DeleteDate = Some(DateTime.now.getMillis))
-                    BigDataDb.TwitterTarget.Update(nwTarget).runAsync
-                  }
-                })
+              println("Delete friend : " + result.statusText)
+              if (result.status != 401) {
+                BigDataDb.TwitterFriend.Filter(x => x.UserID === userId
+                  && x.Identity === identity).delete.runAsync
+                BigDataDb.TwitterTarget.Filter(x => x.UserID === userId
+                  && x.Identity === identity)
+                  .result.headOption.runAsync.map(target => {
+                    if (target.isDefined) {
+                      val nwTarget = target.get.copy(DeleteDate = Some(DateTime.now.getMillis))
+                      BigDataDb.TwitterTarget.Update(nwTarget).runAsync
+                    } else {
+                      val nwTarget = new TwitterTarget {
+                        UserID = userId;
+                        Identity = identity;
+                        DeleteDate = Some(DateTime.now().getMillis);
+                      }
+                      BigDataDb.TwitterTarget.Insert(nwTarget).runAsync
+                    }
+                  })
+              }
             })
           TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.PostUnFollow, ec)
         }
@@ -181,19 +200,22 @@ class TwitterApiService {
                 user.get.Secret)))
               .get
               .map(result => {
-                val objs = result.json.as[JsArray]
-                objs.value.foreach(obj => {
-                  val id = (obj \ "id").as[Long]
-                  TwitterServiceProvider.User.InsertStatus(userId, obj.as[JsObject], ec)
+                println("Import timeline : " + result.statusText)
+                if (result.status != 401) {
+                  val objs = result.json.as[JsArray]
+                  objs.value.foreach(obj => {
+                    val id = (obj \ "id").as[Long]
+                    TwitterServiceProvider.User.InsertStatus(userId, obj.as[JsObject], ec)
 
-                  if (id > sinceId) {
-                    sinceId = id
+                    if (id > sinceId) {
+                      sinceId = id
+                    }
+                  })
+                  if (objs.value.length == 0) {
+                    sinceId = -1
                   }
-                })
-                if (objs.value.length == 0) {
-                  sinceId = -1
+                  update()
                 }
-                update()
               })
           } else {
             println("TimeLine Analyze completed.")
@@ -235,21 +257,24 @@ class TwitterApiService {
                         user.get.Secret)))
                       .get
                       .map(result => {
-                        val obj = result.json.as[JsObject]
-                        val statuses = (obj \ "statuses").as[JsArray]
-                        statuses.value.foreach(status => {
-                          val id = (status \ "id").as[Long]
-                          TwitterServiceProvider.User.InsertStatus(userId, status.as[JsObject], ec)
+                        println("Analyze statues : " + result.statusText)
+                        if (result.status != 401) {
+                          val obj = result.json.as[JsObject]
+                          val statuses = (obj \ "statuses").as[JsArray]
+                          statuses.value.foreach(status => {
+                            val id = (status \ "id").as[Long]
+                            TwitterServiceProvider.User.InsertStatus(userId, status.as[JsObject], ec)
 
-                          if (id > sinceId) {
-                            sinceId = id
+                            if (id > sinceId) {
+                              sinceId = id
+                            }
+                          })
+
+                          if (statuses.value.length == 0) {
+                            sinceId = -1
                           }
-                        })
-
-                        if (statuses.value.length == 0) {
-                          sinceId = -1
+                          update()
                         }
-                        update()
                       })
                   } else {
                     println("Analyze completed.")
