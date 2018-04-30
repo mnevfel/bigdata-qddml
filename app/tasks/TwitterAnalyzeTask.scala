@@ -24,7 +24,7 @@ class TwitterAnalyzeTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit 
   actSys.scheduler.schedule(
     initialDelay = 1.minutes,
     interval = 1.minutes) {
-    val limitDate = DateTime.now().minusHours(1).getMillis
+    val limitDate = DateTime.now().minusHours(6).getMillis
     BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
         .Filter(x => x.RequestType === TwitterRequestType.AnalyzeStatuses))
