@@ -143,14 +143,14 @@ class TwitterUserService {
       && x.AnalyzeDate <= DateTime.now.minusDays(10).getMillis).delete.runAsync
   }
 
-  // Clear Friends(Remove Permanent) -> RequestDate, Older Than 1 Hour(3600000)
+  // Clear Friends(Remove Permanent) -> RequestDate, Older Than 5 Hour(3600000)
   def ClearInvalidFriends(id: Long, ec: ExecutionContext) {
     implicit val exec: ExecutionContext = ec
     BigDataDb.TwitterRequest.Filter(x => x.UserID === id
       && x.RequestType === TwitterRequestType.GetFriends)
       .result.headOption.runAsync.map(request => {
         var limitCallDate = request.isDefined match {
-          case true  => request.get.RequestDate - 3600000
+          case true  => request.get.RequestDate - (3600000 * 5)
           case false => DateTime.now.getMillis()
         }
         // If friend last call date before 1 hour then request date > remove
@@ -172,5 +172,14 @@ class TwitterUserService {
         request.RequestDate = DateTime.now.minusMinutes(55).getMillis
       BigDataDb.TwitterRequest.Insert(request).runAsync;
     })
+  }
+
+  // Create Log - Console & Db
+  def Log(userId: Long, message: String) {
+    BigDataDb.TwitterLog.Insert(new TwitterLog {
+      UserID = userId;
+      Message = message;
+    }).runAsync
+    println(message)
   }
 }

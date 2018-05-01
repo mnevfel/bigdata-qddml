@@ -7,12 +7,14 @@ import databases.BigDataDb._
 import slick.driver.MySQLDriver.api._
 import play.api.libs.oauth._
 import play.api.libs.json._
+import scala.concurrent._
 
 import databases.BigDataDb
 
 import play.api.libs.ws.WSClient
 import scala.concurrent.ExecutionContext
 import org.joda.time.DateTime
+import scala.concurrent.duration.Duration
 
 class TwitterApiService {
   // Get Current Followers For User Account From Tw Api & Update Them On Db
@@ -31,8 +33,8 @@ class TwitterApiService {
                   user.get.Secret)))
                 .get
                 .map(result => {
-                  println("Get followers : " + result.statusText)
-                  if (result.status != 401) {
+                  TwitterServiceProvider.User.Log(userId, "Get followers : " + result.statusText)
+                  if (result.status >= 200 && result.status < 210) {
                     val obj = result.json.as[JsObject]
                     val ids = (obj \ "ids").as[List[Long]]
                     cursor = (obj \ "next_cursor").as[Long]
@@ -43,6 +45,12 @@ class TwitterApiService {
                       }).runAsync
                     })
                     update()
+                  } else if (result.status == 429) {
+                    def task(): Future[Unit] = Future {
+                      Thread.sleep(1000 * 60 * 15)
+                      update()
+                    }
+                    Await.result(task, Duration.Inf)
                   }
                 })
             }
@@ -69,8 +77,8 @@ class TwitterApiService {
                 fuser.get.Secret)))
               .get
               .map(result => {
-                println("Get friends : " + result.statusText)
-                if (result.status != 401) {
+                TwitterServiceProvider.User.Log(userId, "Get friends : " + result.status)
+                if (result.status >= 200 && result.status < 210) {
                   val obj = result.json.as[JsObject]
                   val users = (obj \ "users").as[JsArray]
                   cursor = (obj \ "next_cursor").as[Long]
@@ -103,6 +111,12 @@ class TwitterApiService {
                       })
                   })
                   update()
+                } else if (result.status == 429) {
+                  def task(): Future[Unit] = Future {
+                    Thread.sleep(1000 * 60 * 15)
+                    update()
+                  }
+                  Await.result(task, Duration.Inf)
                 }
               })
           }
@@ -124,8 +138,8 @@ class TwitterApiService {
               user.get.Secret)))
             .post("ignore")
             .map(result => {
-              println("Insert friend : " + result.statusText)
-              if (result.status != 401) {
+              TwitterServiceProvider.User.Log(userId, "Insert friend : " + result.statusText)
+              if (result.status >= 200 && result.status < 210) {
                 BigDataDb.TwitterFriend.Any(x => x.UserID === userId
                   && x.Identity === identity).runAsync.map(any => {
                   if (!any) {
@@ -153,8 +167,8 @@ class TwitterApiService {
               user.get.Secret)))
             .post("ignored")
             .map(result => {
-              println("Delete friend : " + result.statusText)
-              if (result.status != 401) {
+              TwitterServiceProvider.User.Log(userId, "Delete friend : " + result.statusText)
+              if (result.status >= 200 && result.status < 210) {
                 BigDataDb.TwitterFriend.Filter(x => x.UserID === userId
                   && x.Identity === identity).delete.runAsync
                 BigDataDb.TwitterTarget.Filter(x => x.UserID === userId
@@ -193,15 +207,15 @@ class TwitterApiService {
               sinceIdQs = "&since_id=" + sinceId.toString()
 
             val repUrl = url.replace("{{since_id}}", sinceIdQs)
-            println("TimeLine Analyzing -> " + repUrl)
+            TwitterServiceProvider.User.Log(userId, "TimeLine Analyzing -> " + repUrl)
             ws.url(repUrl)
               .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
                 user.get.Token,
                 user.get.Secret)))
               .get
               .map(result => {
-                println("Import timeline : " + result.statusText)
-                if (result.status != 401) {
+                TwitterServiceProvider.User.Log(userId, "Import timeline : " + result.statusText)
+                if (result.status >= 200 && result.status < 210) {
                   val objs = result.json.as[JsArray]
                   objs.value.foreach(obj => {
                     val id = (obj \ "id").as[Long]
@@ -218,12 +232,12 @@ class TwitterApiService {
                 }
               })
           } else {
-            println("TimeLine Analyze completed.")
+            TwitterServiceProvider.User.Log(userId, "TimeLine Analyze completed.")
           }
         }
         update()
 
-        TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.GetStatuses, ec)
+        TwitterServiceProvider.User.UpdateRequestType(userId, false, TwitterRequestType.GetTimeLine, ec)
       }
     })
   }
@@ -250,15 +264,15 @@ class TwitterApiService {
                       sinceIdQs = "&since_id=" + sinceId.toString()
 
                     val repUrl = url.replace("{{since_id}}", sinceIdQs)
-                    println("Analyzing -> " + repUrl)
+                    TwitterServiceProvider.User.Log(userId, "Analyzing -> " + repUrl)
                     ws.url(repUrl)
                       .sign(OAuthCalculator(TwitterHelper.TwitterKey, RequestToken(
                         user.get.Token,
                         user.get.Secret)))
                       .get
                       .map(result => {
-                        println("Analyze statues : " + result.statusText)
-                        if (result.status != 401) {
+                        TwitterServiceProvider.User.Log(userId, "Analyze statues : " + result.statusText)
+                        if (result.status >= 200 && result.status < 210) {
                           val obj = result.json.as[JsObject]
                           val statuses = (obj \ "statuses").as[JsArray]
                           statuses.value.foreach(status => {
@@ -277,7 +291,7 @@ class TwitterApiService {
                         }
                       })
                   } else {
-                    println("Analyze completed.")
+                    TwitterServiceProvider.User.Log(userId, "Analyze completed.")
                   }
                 }
                 update()

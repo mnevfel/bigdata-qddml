@@ -24,13 +24,13 @@ class TwitterUserTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit ec:
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 1.minutes) {
-    val limitDate = DateTime.now().minusMinutes(15).getMillis
+    val limitDate = DateTime.now().minusHours(1).getMillis
     BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
         .Filter(x => x.RequestType === TwitterRequestType.GetFollowers))
       .on(_.ID === _.UserID)
       .groupBy(x => x._1)
-      .map(x => (x._1, x._2.map(y => y._2.map(z => z.RequestDate)).max))
+      .map(x => (x._1, x._2.map(y => y._2.map(z => z.RequestDate)).max.getOrElse(limitDate)))
       .filter(x => x._2 <= limitDate).map(x => x._1.ID)
       .result.runAsync.map(response => response.foreach(userId => {
         TwitterServiceProvider.Api.UpdateFollowers(userId, ws, ec)
@@ -41,13 +41,13 @@ class TwitterUserTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit ec:
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 1.minutes) {
-    val limitDate = DateTime.now().minusMinutes(15).getMillis
+    val limitDate = DateTime.now().minusHours(1).getMillis
     val ids = BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
         .Filter(x => x.RequestType === TwitterRequestType.GetFriends))
       .on(_.ID === _.UserID)
       .groupBy(x => x._1)
-      .map(x => (x._1, x._2.map(y => y._2.map(z => z.RequestDate)).max))
+      .map(x => (x._1, x._2.map(y => y._2.map(z => z.RequestDate)).max.getOrElse(limitDate)))
       .filter(x => x._2 <= limitDate).map(x => x._1.ID)
       .result.runAsync.map(response => response.foreach(userId => {
         TwitterServiceProvider.Api.UpdateFriends(userId, false, ws, ec)

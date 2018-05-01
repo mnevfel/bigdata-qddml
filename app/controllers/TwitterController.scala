@@ -76,8 +76,13 @@ class TwitterController @Inject() (ws: WSClient, cc: ControllerComponents)(impli
           .Filter(x => x.UserID === user.ID
             && x.DeleteDate.isDefined).length.result.run
 
+        var logText = ""
+        val logs = BigDataDb.TwitterLog.Filter(x => x.UserID === user.ID)
+          .sortBy(x => x.Date.desc).take(10)
+          .result.run.foreach(x => { logText += x.Message + "<br>" })
+
         dashText += "Fri(P):" + friendLen + "|Fri(!P):" + followedLen + "|Fo:" + followLen + "|UnFo:" + unFollowLen
-        dashText += "</br>"
+        dashText += "</br>" + logText + "</br>"
       })
 
       Ok(dashText)

@@ -13,5 +13,6 @@ object BigDataDb extends UnitOfWork("bigdata_qddml") {
   val TwitterStatus = new Repository[TwitterStatus, TwitterStatusTable](TableQuery[TwitterStatusTable])
   val TwitterRequest = new Repository[TwitterRequest, TwitterRequestTable](TableQuery[TwitterRequestTable])
   val TwitterTarget = new Repository[TwitterTarget, TwitterTargetTable](TableQuery[TwitterTargetTable])
+  val TwitterLog = new Repository[TwitterLog, TwitterLogTable](TableQuery[TwitterLogTable])
   val TwitterInvalidCase = new Repository[TwitterInvalidCase, TwitterInvalidCaseTable](TableQuery[TwitterInvalidCaseTable])
 }
