@@ -24,7 +24,7 @@ class TwitterTargetTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit e
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 20.seconds) {
-    val limitDate = DateTime.now().minusMinutes(2).getMillis
+    val limitDate = DateTime.now().minusMinutes(6).getMillis
     BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
         .Filter(x => x.RequestType === TwitterRequestType.PostFollow))
@@ -49,7 +49,7 @@ class TwitterTargetTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit e
   actSys.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 20.seconds) {
-    val limitDate = DateTime.now().minusMinutes(2).getMillis
+    val limitDate = DateTime.now().minusMinutes(5).getMillis
     val limitFriendDate = DateTime.now().minusHours(6).getMillis
     BigDataDb.TwitterUser.table
       .joinLeft(BigDataDb.TwitterRequest
@@ -64,11 +64,11 @@ class TwitterTargetTask @Inject() (ws: WSClient, actSys: ActorSystem)(implicit e
           && !x.Permanent
           && BigDataDb.TwitterTarget.Filter(y => y.UserID === userId
             && y.DeleteDate.isDefined
-            && y.Identity === x.Identity).length === 0)
-          .sortBy(x=> x.FriendDate).take(2).result.runAsync.map(friends => {
-            friends.foreach(friend => {
-              TwitterServiceProvider.Api.DeleteFriend(userId, friend.Identity, ws, ec)
-            })
+            && y.Identity === x.Identity).length === 0).sortBy(x => x.FriendDate)
+          .result.headOption.runAsync.map(friend => {
+            if (friend.isDefined) {
+              TwitterServiceProvider.Api.DeleteFriend(userId, friend.get.Identity, ws, ec)
+            }
           })
       }))
   }
